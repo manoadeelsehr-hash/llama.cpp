@@ -28,8 +28,14 @@ jobs:
       - name: Install SPIRV-Headers
         run: |
           git clone --depth 1 https://github.com/KhronosGroup/SPIRV-Headers.git "$HOME/SPIRV-Headers"
-          cmake -S "$HOME/SPIRV-Headers" -B "$HOME/SPIRV-Headers/build" -G Ninja
-          cmake --install "$HOME/SPIRV-Headers/build" --prefix "$HOME/spirv-install"
+          cmake -S "$HOME/SPIRV-Headers" -B "$HOME/SPIRV-Headers/build" -G Ninja -DCMAKE_INSTALL_PREFIX="$HOME/spirv-install"
+          cmake --install "$HOME/SPIRV-Headers/build"
+          echo "Installed SPIRV-Headers files:"
+          find "$HOME/spirv-install" -type f | sort
+          SPIRV_HEADERS_DIR="$(dirname "$(find "$HOME/spirv-install" -type f -name 'SPIRV-HeadersConfig.cmake' -print -quit)")"
+          test -n "$SPIRV_HEADERS_DIR"
+          test -f "$SPIRV_HEADERS_DIR/SPIRV-HeadersConfig.cmake"
+          echo "SPIRV_HEADERS_DIR=$SPIRV_HEADERS_DIR"
 
       - name: Configure Android Vulkan build
         env:
@@ -50,7 +56,7 @@ jobs:
             -DGGML_LLAMAFILE=OFF \
             -DGGML_NATIVE=OFF \
             -DLLAMA_CURL=OFF \
-            -DCMAKE_PREFIX_PATH="$HOME/spirv-install"
+            -DCMAKE_PREFIX_PATH="$HOME/spirv-install" \\\n            -DSPIRV-Headers_DIR="$SPIRV_HEADERS_DIR"
 
       - name: Build
         run: |
