@@ -1,4 +1,4 @@
-name: Remote Vulkan Build
+name: Remote Android Vulkan Build
 
 on:
   workflow_dispatch:
@@ -11,28 +11,46 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-14 g++-14 build-essential glslc libvulkan-dev spirv-headers ninja-build
+          sudo apt-get install -y cmake ninja-build build-essential glslc libvulkan-dev spirv-headers unzip wget
 
-      - name: Configure
+      - name: Install Android NDK
         run: |
-          cmake -B build \
+          mkdir -p "$HOME/android-sdk/cmdline-tools"
+          cd "$HOME"
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
+          unzip -q commandlinetools-linux-13114758_latest.zip
+          mv cmdline-tools "$HOME/android-sdk/cmdline-tools/latest"
+          yes | "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$HOME/android-sdk" "platform-tools" "ndk;29.0.13113456"
+
+      - name: Configure Android Vulkan build
+        env:
+          ANDROID_NDK: ${{ env.HOME }}/android-sdk/ndk/29.0.13113456
+        run: |
+          cmake -S . -B build-android \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DGGML_VULKAN=ON
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-28 \
+            -DGGML_VULKAN=ON \
+            -DGGML_OPENMP=OFF \
+            -DGGML_LLAMAFILE=OFF \
+            -DGGML_NATIVE=OFF \
+            -DLLAMA_CURL=OFF
 
       - name: Build
         run: |
-          cmake --build build -j $(nproc)
+          cmake --build build-android --parallel
 
       - name: Package
         run: |
-          tar -czf llama-vulkan-build.tar.gz -C build/bin .
+          tar -czf llama-android-vulkan.tar.gz -C build-android/bin .
 
       - name: Upload build
         uses: actions/upload-artifact@v6
         with:
-          name: llama-vulkan-build
-          path: llama-vulkan-build.tar.gz
+          name: llama-android-vulkan
+          path: llama-android-vulkan.tar.gz
