@@ -57,7 +57,8 @@ jobs:
             -DGGML_LLAMAFILE=OFF \
             -DGGML_NATIVE=OFF \
             -DLLAMA_CURL=OFF \
-            -DCMAKE_PREFIX_PATH="$HOME/spirv-install" \\\n            -DSPIRV-Headers_DIR="$SPIRV_HEADERS_DIR"
+            -DCMAKE_PREFIX_PATH="$HOME/spirv-install" \
+            -DSPIRV-Headers_DIR="$SPIRV_HEADERS_DIR"
 
       - name: Build
         run: |
