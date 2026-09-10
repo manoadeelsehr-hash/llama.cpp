@@ -30,15 +30,17 @@ jobs:
           git clone --depth 1 https://github.com/KhronosGroup/Vulkan-Headers.git "$HOME/Vulkan-Headers"
           cmake -S "$HOME/Vulkan-Headers" -B "$HOME/Vulkan-Headers/build" -G Ninja -DCMAKE_INSTALL_PREFIX="$HOME/vulkan-install"
           cmake --install "$HOME/Vulkan-Headers/build"
-          echo "VULKAN_HEADERS_DIR=$(find "$HOME/vulkan-install" -type f -name 'VulkanHeadersConfig.cmake' -printf '%h\\n' -quit)" >> "$GITHUB_ENV"
+          VULKAN_HEADERS_DIR="$(dirname "$(find "$HOME/vulkan-install" -type f -name 'VulkanHeadersConfig.cmake' -print -quit)")"
+          test -n "$VULKAN_HEADERS_DIR"
+          test -f "$VULKAN_HEADERS_DIR/VulkanHeadersConfig.cmake"
+          echo "VULKAN_HEADERS_DIR=$VULKAN_HEADERS_DIR"
+          echo "VULKAN_HEADERS_DIR=$VULKAN_HEADERS_DIR" >> "$GITHUB_ENV"
 
       - name: Install SPIRV-Headers
         run: |
           git clone --depth 1 https://github.com/KhronosGroup/SPIRV-Headers.git "$HOME/SPIRV-Headers"
           cmake -S "$HOME/SPIRV-Headers" -B "$HOME/SPIRV-Headers/build" -G Ninja -DCMAKE_INSTALL_PREFIX="$HOME/spirv-install"
           cmake --install "$HOME/SPIRV-Headers/build"
-          echo "Installed SPIRV-Headers files:"
-          find "$HOME/spirv-install" -type f | sort
           SPIRV_HEADERS_DIR="$(dirname "$(find "$HOME/spirv-install" -type f -name 'SPIRV-HeadersConfig.cmake' -print -quit)")"
           test -n "$SPIRV_HEADERS_DIR"
           test -f "$SPIRV_HEADERS_DIR/SPIRV-HeadersConfig.cmake"
