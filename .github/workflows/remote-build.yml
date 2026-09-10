@@ -25,6 +25,13 @@ jobs:
           mv cmdline-tools "$HOME/android-sdk/cmdline-tools/latest"
           yes | "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$HOME/android-sdk" "platform-tools" "ndk;29.0.13113456"
 
+      - name: Install Vulkan-Headers
+        run: |
+          git clone --depth 1 https://github.com/KhronosGroup/Vulkan-Headers.git "$HOME/Vulkan-Headers"
+          cmake -S "$HOME/Vulkan-Headers" -B "$HOME/Vulkan-Headers/build" -G Ninja -DCMAKE_INSTALL_PREFIX="$HOME/vulkan-install"
+          cmake --install "$HOME/Vulkan-Headers/build"
+          echo "VULKAN_HEADERS_DIR=$(find "$HOME/vulkan-install" -type f -name 'VulkanHeadersConfig.cmake' -printf '%h\\n' -quit)" >> "$GITHUB_ENV"
+
       - name: Install SPIRV-Headers
         run: |
           git clone --depth 1 https://github.com/KhronosGroup/SPIRV-Headers.git "$HOME/SPIRV-Headers"
@@ -57,8 +64,9 @@ jobs:
             -DGGML_LLAMAFILE=OFF \
             -DGGML_NATIVE=OFF \
             -DLLAMA_CURL=OFF \
-            -DCMAKE_PREFIX_PATH="$HOME/spirv-install" \
-            -DSPIRV-Headers_DIR="$SPIRV_HEADERS_DIR"
+            -DCMAKE_PREFIX_PATH="$HOME/spirv-install;$HOME/vulkan-install" \
+            -DSPIRV-Headers_DIR="$SPIRV_HEADERS_DIR" \
+            -DVulkanHeaders_DIR="$VULKAN_HEADERS_DIR"
 
       - name: Build
         run: |
