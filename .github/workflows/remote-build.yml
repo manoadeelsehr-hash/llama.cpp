@@ -29,7 +29,11 @@ jobs:
         env:
           ANDROID_NDK: /home/runner/android-sdk/ndk/29.0.13113456
         run: |
-          export PATH="/home/runner/android-sdk/cmdline-tools/latest/bin:$PATH"\n          export PATH="/usr/bin:$PATH"\n          test -f "$ANDROID_NDK/build/cmake/android.toolchain.cmake"\n          command -v ninja\n          cmake -S . -B build-android \
+          export PATH="/home/runner/android-sdk/cmdline-tools/latest/bin:$PATH"
+          export PATH="/usr/bin:$PATH"
+          test -f "$ANDROID_NDK/build/cmake/android.toolchain.cmake"
+          command -v ninja
+          cmake -S . -B build-android \\
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
