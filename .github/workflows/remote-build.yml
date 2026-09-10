@@ -14,7 +14,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build build-essential glslc libvulkan-dev spirv-headers unzip wget
+          sudo apt-get install -y cmake ninja-build build-essential glslc libvulkan-dev unzip wget git
 
       - name: Install Android NDK
         run: |
@@ -25,6 +25,12 @@ jobs:
           mv cmdline-tools "$HOME/android-sdk/cmdline-tools/latest"
           yes | "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$HOME/android-sdk" "platform-tools" "ndk;29.0.13113456"
 
+      - name: Install SPIRV-Headers
+        run: |
+          git clone --depth 1 https://github.com/KhronosGroup/SPIRV-Headers.git "$HOME/SPIRV-Headers"
+          cmake -S "$HOME/SPIRV-Headers" -B "$HOME/SPIRV-Headers/build" -G Ninja
+          cmake --install "$HOME/SPIRV-Headers/build" --prefix "$HOME/spirv-install"
+
       - name: Configure Android Vulkan build
         env:
           ANDROID_NDK: /home/runner/android-sdk/ndk/29.0.13113456
@@ -33,7 +39,7 @@ jobs:
           export PATH="/usr/bin:$PATH"
           test -f "$ANDROID_NDK/build/cmake/android.toolchain.cmake"
           command -v ninja
-          cmake -S . -B build-android \
+          cmake -S . -B build-android \\
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
@@ -43,7 +49,7 @@ jobs:
             -DGGML_OPENMP=OFF \
             -DGGML_LLAMAFILE=OFF \
             -DGGML_NATIVE=OFF \
-            -DLLAMA_CURL=OFF
+            -DLLAMA_CURL=OFF \\\n            -DCMAKE_PREFIX_PATH="$HOME/spirv-install"
 
       - name: Build
         run: |
