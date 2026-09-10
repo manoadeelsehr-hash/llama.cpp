@@ -33,7 +33,7 @@ jobs:
           export PATH="/usr/bin:$PATH"
           test -f "$ANDROID_NDK/build/cmake/android.toolchain.cmake"
           command -v ninja
-          cmake -S . -B build-android \\
+          cmake -S . -B build-android \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
