@@ -1,0 +1,38 @@
+name: Remote Vulkan Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-14 g++-14 build-essential glslc libvulkan-dev spirv-headers ninja-build
+
+      - name: Configure
+        run: |
+          cmake -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DGGML_VULKAN=ON
+
+      - name: Build
+        run: |
+          cmake --build build -j $(nproc)
+
+      - name: Package
+        run: |
+          tar -czf llama-vulkan-build.tar.gz -C build/bin .
+
+      - name: Upload build
+        uses: actions/upload-artifact@v6
+        with:
+          name: llama-vulkan-build
+          path: llama-vulkan-build.tar.gz
