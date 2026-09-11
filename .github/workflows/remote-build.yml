@@ -34,8 +34,8 @@ jobs:
           test -f "$ANDROID_NDK/build/cmake/android.toolchain.cmake"
           command -v cmake
           command -v ninja
-          test -f "$HOME/vulkan-install/include/vulkan/vulkan.hpp"
-          test -f "$HOME/spirv-install/share/cmake/SPIRV-Headers/SPIRV-HeadersConfig.cmake"
+          test -d "$HOME/vulkan-install"
+          test -d "$HOME/spirv-install"
           cmake -S . -B build-android -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 -DGGML_VULKAN=ON -DGGML_OPENMP=OFF -DGGML_LLAMAFILE=OFF -DGGML_NATIVE=OFF -DLLAMA_CURL=OFF -DCMAKE_CXX_FLAGS="-I$HOME/vulkan-install/include" -DCMAKE_PREFIX_PATH="$HOME/spirv-install;$HOME/vulkan-install" -DSPIRV-Headers_DIR="$SPIRV_HEADERS_DIR" -DVulkanHeaders_DIR="$VULKAN_HEADERS_DIR"
 
       - name: Build
