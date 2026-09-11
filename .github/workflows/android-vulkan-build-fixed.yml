@@ -5,11 +5,178 @@ on:
     branches:
       - master
 
+  workflow_dispatch:
+    inputs:
+      model_repo:
+        description: Hugging Face model repository
+        required: false
+        default: rippertnt/Qwen3-1.7B-Q4_K_M-GGUF
+        type: string
+      model_file:
+        description: GGUF filename
+        required: false
+        default: qwen3-1.7b-q4_k_m.gguf
+        type: string
+
+  repository_dispatch:
+    types:
+      - android-vulkan-build
+
+permissions:
+  contents: read
+
 jobs:
-  bootstrap:
+  build:
     runs-on: ubuntu-24.04
+
     steps:
-      - name: Bootstrap registration
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
         run: |
-          echo "GitHub workflow index bootstrap PASS"
-          echo "Commit: $GITHUB_SHA"
+          set -e
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            ninja-build \
+            build-essential \
+            glslc \
+            libvulkan-dev \
+            spirv-headers \
+            unzip \
+            wget \
+            git
+
+      - name: Install Android NDK
+        run: |
+          set -e
+          mkdir -p "$HOME/android-sdk/cmdline-tools"
+          cd "$HOME"
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
+          unzip -q commandlinetools-linux-13114758_latest.zip
+          mv cmdline-tools "$HOME/android-sdk/cmdline-tools/latest"
+          yes | "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" \
+            --sdk_root="$HOME/android-sdk" \
+            "platform-tools" \
+            "ndk;27.2.12479018"
+          test -f "$HOME/android-sdk/ndk/27.2.12479018/build/cmake/android.toolchain.cmake"
+
+      - name: Install Vulkan-Headers
+        run: |
+          set -e
+          git clone --depth 1 \
+            https://github.com/KhronosGroup/Vulkan-Headers.git \
+            "$HOME/Vulkan-Headers"
+
+          cmake \
+            -S "$HOME/Vulkan-Headers" \
+            -B "$HOME/Vulkan-Headers/build" \
+            -G Ninja \
+            -DCMAKE_INSTALL_PREFIX="$HOME/vulkan-install"
+
+          cmake --install "$HOME/Vulkan-Headers/build"
+
+          test -f "$HOME/vulkan-install/include/vulkan/vulkan.h"
+          test -f "$HOME/vulkan-install/include/vulkan/vulkan.hpp"
+
+          VULKAN_HEADERS_DIR="$(find "$HOME/vulkan-install" \
+            -type f \
+            \( -name 'VulkanHeadersConfig.cmake' -o -name 'VulkanHeadersConfigVersion.cmake' \) \
+            -print -quit | xargs -r dirname)"
+
+          if [ -z "$VULKAN_HEADERS_DIR" ]; then
+            VULKAN_HEADERS_DIR="$HOME/vulkan-install"
+          fi
+
+          echo "VULKAN_HEADERS_DIR=$VULKAN_HEADERS_DIR" >> "$GITHUB_ENV"
+          echo "VULKAN_HEADERS_INCLUDE=$HOME/vulkan-install/include" >> "$GITHUB_ENV"
+
+          echo "Vulkan headers: $VULKAN_HEADERS_DIR"
+
+      - name: Install SPIRV-Headers
+        run: |
+          set -e
+          git clone --depth 1 \
+            https://github.com/KhronosGroup/SPIRV-Headers.git \
+            "$HOME/SPIRV-Headers"
+
+          cmake \
+            -S "$HOME/SPIRV-Headers" \
+            -B "$HOME/SPIRV-Headers/build" \
+            -G Ninja \
+            -DCMAKE_INSTALL_PREFIX="$HOME/spirv-install"
+
+          cmake --install "$HOME/SPIRV-Headers/build"
+
+          SPIRV_HEADERS_DIR="$(find "$HOME/spirv-install" \
+            -type f \
+            -name 'SPIRV-HeadersConfig.cmake' \
+            -print -quit | xargs -r dirname)"
+
+          test -n "$SPIRV_HEADERS_DIR"
+          test -f "$SPIRV_HEADERS_DIR/SPIRV-HeadersConfig.cmake"
+
+          echo "SPIRV_HEADERS_DIR=$SPIRV_HEADERS_DIR" >> "$GITHUB_ENV"
+          echo "SPIR-V headers: $SPIRV_HEADERS_DIR"
+
+      - name: Select model
+        id: model
+        env:
+          INPUT_REPO: ${{ github.event.inputs.model_repo }}
+          INPUT_FILE: ${{ github.event.inputs.model_file }}
+          PAYLOAD_REPO: ${{ github.event.client_payload.model_repo }}
+          PAYLOAD_FILE: ${{ github.event.client_payload.model_file }}
+        run: |
+          set -e
+
+          MODEL_REPO="${INPUT_REPO:-${PAYLOAD_REPO:-rippertnt/Qwen3-1.7B-Q4_K_M-GGUF}}"
+          MODEL_FILE="${INPUT_FILE:-${PAYLOAD_FILE:-qwen3-1.7b-q4_k_m.gguf}}"
+
+          echo "MODEL_REPO=$MODEL_REPO" >> "$GITHUB_ENV"
+          echo "MODEL_FILE=$MODEL_FILE" >> "$GITHUB_ENV"
+
+          echo "Selected model repository: $MODEL_REPO"
+          echo "Selected model file: $MODEL_FILE"
+
+      - name: Download and inspect GGUF
+        run: |
+          set -e
+          mkdir -p models
+
+          wget -q --show-progress \
+            "https://huggingface.co/${MODEL_REPO}/resolve/main/${MODEL_FILE}?download=true" \
+            -O "models/${MODEL_FILE}"
+
+          test -s "models/${MODEL_FILE}"
+
+          echo "===== GGUF FILE ====="
+          ls -lh "models/${MODEL_FILE}"
+          file "models/${MODEL_FILE}"
+
+          echo "===== GGUF SHA256 ====="
+          sha256sum "models/${MODEL_FILE}"
+
+      - name: Record target Adreno 660 profile
+        run: |
+          cat > TARGET_GPU_PROFILE.txt <<'EOF'
+Target Android GPU:
+  SoC: Qualcomm Snapdragon SM8350
+  GPU: Adreno 660
+  Driver: Mesa Turnip
+  Android ABI: arm64-v8a
+  Vulkan backend: GGML_VULKAN
+
+Observed phone Vulkan profile:
+  Vulkan memory: ~5449 MiB
+  Subgroup size: 128
+  Subgroup minimum: 64
+  Subgroup maximum: 128
+  Subgroup arithmetic: enabled
+  Subgroup size control: enabled
+  Full subgroups: enabled
+
+Important:
+  GitHub runner cannot execute this binary on the actual
+  Adreno 660 / Turnip phone GPU.
+  Final GPU inference validation must be performed on-device.
