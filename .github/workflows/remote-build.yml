@@ -23,7 +23,7 @@ jobs:
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
           unzip -q commandlinetools-linux-13114758_latest.zip
           mv cmdline-tools "$HOME/android-sdk/cmdline-tools/latest"
-          yes | "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$HOME/android-sdk" "platform-tools" "ndk;29.0.13113456"
+          yes | "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$HOME/android-sdk" "platform-tools" "ndk;27.2.12479018"
 
       - name: Install Vulkan-Headers
         run: |
@@ -45,7 +45,7 @@ jobs:
 
       - name: Configure Android Vulkan build
         env:
-          ANDROID_NDK: /home/runner/android-sdk/ndk/29.0.13113456
+          ANDROID_NDK: /home/runner/android-sdk/ndk/27.2.12479018
         run: |
           export PATH="/home/runner/android-sdk/cmdline-tools/latest/bin:$PATH"
           export PATH="/usr/bin:$PATH"
