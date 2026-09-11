@@ -7288,6 +7288,11 @@ static vk_device ggml_vk_get_device(size_t idx) {
             .setPEnabledExtensionNames(device_extensions);
         device_create_info.setPNext(&device_features2);
         device->device = device->physical_device.createDevice(device_create_info);
+        ggml_vk_default_dispatcher().init(
+            static_cast<VkInstance>(vk_instance.instance),
+            vkGetInstanceProcAddr,
+            static_cast<VkDevice>(device->device),
+            vkGetDeviceProcAddr);
 
         if (device->device_fault) {
             device->pfn_vkGetDeviceFaultInfoEXT = (PFN_vkGetDeviceFaultInfoEXT)
