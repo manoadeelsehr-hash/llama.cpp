@@ -45,18 +45,22 @@ jobs:
 
       - name: Diagnose Android toolchain
         run: |
+          set +e
           echo "=== HOST ==="
-          uname -a
-          uname -m
+          uname -a || true
+          uname -m || true
           echo "=== NDK ==="
           echo "$ANDROID_NDK"
-          file "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
-          ls -l "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
-          echo "=== CLANG ==="
-          "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" --version
+          echo "=== CLANG FILE ==="
+          file "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" || true
+          echo "=== CLANG LS ==="
+          ls -l "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" || true
+          echo "=== CLANG VERSION ==="
+          "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" --version || true
           echo "=== ELF ==="
-          readelf -h "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" | grep -E 'Class:|Data:|Machine:'
+          readelf -h "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" 2>&1 | grep -E 'Class:|Data:|Machine:' || true
           echo "=== DONE ==="
+          exit 0
 
       - name: Configure Android Vulkan build
         env:
