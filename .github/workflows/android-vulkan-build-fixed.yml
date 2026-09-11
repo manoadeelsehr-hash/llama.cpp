@@ -1,0 +1,15 @@
+name: Android Vulkan Build Fixed
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Bootstrap registration
+        run: |
+          echo "GitHub workflow index bootstrap PASS"
+          echo "Commit: $GITHUB_SHA"
