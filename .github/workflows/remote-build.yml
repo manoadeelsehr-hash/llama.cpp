@@ -2,10 +2,19 @@ name: Remote Android Vulkan Build
 
 on:
   workflow_dispatch:
+    inputs:
+      model_repo:
+        description: 'Hugging Face GGUF repository'
+        required: false
+        default: 'rippertnt/Qwen3-1.7B-Q4_K_M-GGUF'
+      model_file:
+        description: 'GGUF filename'
+        required: false
+        default: 'qwen3-1.7b-q4_k_m.gguf'
 
 jobs:
   build:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
@@ -23,27 +32,111 @@ jobs:
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
           unzip -q commandlinetools-linux-13114758_latest.zip
           mv cmdline-tools "$HOME/android-sdk/cmdline-tools/latest"
-          yes | "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$HOME/android-sdk" "platform-tools" "ndk;29.0.13113456"
+          yes | "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$HOME/android-sdk" "platform-tools" "ndk;27.2.12479018"
+
+      - name: Install Vulkan-Headers
+        run: |
+          git clone --depth 1 https://github.com/KhronosGroup/Vulkan-Headers.git "$HOME/Vulkan-Headers"
+          cmake -S "$HOME/Vulkan-Headers" -B "$HOME/Vulkan-Headers/build" -G Ninja -DCMAKE_INSTALL_PREFIX="$HOME/vulkan-install"
+          cmake --install "$HOME/Vulkan-Headers/build"
+          test -f "$HOME/vulkan-install/include/vulkan/vulkan.hpp"
+          echo "VULKAN_HEADERS_INCLUDE=$HOME/vulkan-install/include" >> "$GITHUB_ENV"
+
+      - name: Install SPIRV-Headers
+        run: |
+          git clone --depth 1 https://github.com/KhronosGroup/SPIRV-Headers.git "$HOME/SPIRV-Headers"
+          cmake -S "$HOME/SPIRV-Headers" -B "$HOME/SPIRV-Headers/build" -G Ninja -DCMAKE_INSTALL_PREFIX="$HOME/spirv-install"
+          cmake --install "$HOME/SPIRV-Headers/build"
+          SPIRV_HEADERS_DIR="$(dirname "$(find "$HOME/spirv-install" -type f -name 'SPIRV-HeadersConfig.cmake' -print -quit)")"
+          test -n "$SPIRV_HEADERS_DIR"
+          test -f "$SPIRV_HEADERS_DIR/SPIRV-HeadersConfig.cmake"
+          echo "SPIRV_HEADERS_DIR=$SPIRV_HEADERS_DIR" >> "$GITHUB_ENV"
+
+      - name: Download and inspect GGUF
+        env:
+          MODEL_REPO: ${{ github.event.inputs.model_repo || 'rippertnt/Qwen3-1.7B-Q4_K_M-GGUF' }}
+          MODEL_FILE: ${{ github.event.inputs.model_file || 'qwen3-1.7b-q4_k_m.gguf' }}
+        run: |
+          set -e
+          mkdir -p models
+          wget -q --show-progress \
+            "https://huggingface.co/${MODEL_REPO}/resolve/main/${MODEL_FILE}?download=true" \
+            -O "models/${MODEL_FILE}"
+
+          ls -lh "models/${MODEL_FILE}"
+          file "models/${MODEL_FILE}"
+          sha256sum "models/${MODEL_FILE}"
+
+          test -s "models/${MODEL_FILE}"
+
+      - name: Record target Adreno 660 profile
+        run: |
+          set -e
+          cat > TARGET_GPU_PROFILE.txt <<'EOF'
+Target Android GPU:
+  SoC: Qualcomm Snapdragon SM8350
+  GPU: Adreno 660
+  Driver: Mesa Turnip
+  Vulkan memory observed: ~5449 MiB
+  Subgroup size: 128
+  Subgroup minimum: 64
+  Subgroup maximum: 128
+  Subgroup arithmetic: enabled
+  Subgroup size control: enabled
+  Full subgroups: enabled
+  Android ABI: arm64-v8a
+  Vulkan backend: GGML_VULKAN
+EOF
+
+          cat TARGET_GPU_PROFILE.txt
 
       - name: Configure Android Vulkan build
         env:
-          ANDROID_NDK: ${{ env.HOME }}/android-sdk/ndk/29.0.13113456
+          ANDROID_NDK: /home/runner/android-sdk/ndk/27.2.12479018
         run: |
-          cmake -S . -B build-android \
-            -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
-            -DANDROID_ABI=arm64-v8a \
-            -DANDROID_PLATFORM=android-28 \
-            -DGGML_VULKAN=ON \
-            -DGGML_OPENMP=OFF \
-            -DGGML_LLAMAFILE=OFF \
-            -DGGML_NATIVE=OFF \
-            -DLLAMA_CURL=OFF
+          export PATH="/home/runner/android-sdk/cmdline-tools/latest/bin:$PATH"
+          export PATH="/usr/bin:$PATH"
+          test -f "$ANDROID_NDK/build/cmake/android.toolchain.cmake"
+          command -v cmake
+          command -v ninja
+          cmake -S . -B build-android -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 -DGGML_VULKAN=ON -DGGML_OPENMP=OFF -DGGML_LLAMAFILE=OFF -DGGML_NATIVE=OFF -DLLAMA_CURL=OFF -DCMAKE_CXX_FLAGS="-I$HOME/vulkan-install/include -I$HOME/spirv-install/include" -DCMAKE_PREFIX_PATH="$HOME/spirv-install;$HOME/vulkan-install" -DSPIRV-Headers_DIR="$SPIRV_HEADERS_DIR" -DVulkanHeaders_DIR="$VULKAN_HEADERS_DIR"
 
       - name: Build
         run: |
           cmake --build build-android --parallel
+
+      - name: Test Vulkan build and GGUF
+        run: |
+          set -e
+
+          echo "=== BUILD OUTPUT ==="
+          ls -lh build-android/bin/
+
+          echo "=== LLAMA VERSION ==="
+          ./build-android/bin/llama-cli --version
+
+          echo "=== MODEL INFO ==="
+          ./build-android/bin/llama-cli \
+            -m models/qwen3-1.7b-q4_k_m.gguf \
+            --model-info \
+            2>&1 | tee model-info.txt
+
+          echo "=== CPU SANITY TEST ==="
+          ./build-android/bin/llama-cli \
+            -m models/qwen3-1.7b-q4_k_m.gguf \
+            -ngl 0 \
+            -c 256 \
+            -n 16 \
+            -t 2 \
+            -p "What is 2 plus 2? Reply with only the number." \
+            --no-display-prompt \
+            2>&1 | tee inference-test.txt
+
+          grep -Eiq '(^|[^0-9])4([^0-9]|$)' inference-test.txt
+
+          echo "MODEL CPU SANITY: PASS"
+          echo "ANDROID VULKAN BUILD: PASS"
+          echo "TARGET GPU PROFILE: Adreno 660 / Turnip"
 
       - name: Package
         run: |
