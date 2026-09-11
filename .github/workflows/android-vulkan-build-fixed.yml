@@ -180,3 +180,89 @@ Important:
   GitHub runner cannot execute this binary on the actual
   Adreno 660 / Turnip phone GPU.
   Final GPU inference validation must be performed on-device.
+
+          PROFILE
+
+          cat TARGET_GPU_PROFILE.txt
+
+      - name: Configure Android Vulkan build
+        env:
+          ANDROID_NDK: /home/runner/android-sdk/ndk/27.2.12479018
+        run: |
+          set -e
+          export PATH="/home/runner/android-sdk/cmdline-tools/latest/bin:/usr/bin:$PATH"
+
+          test -f "$ANDROID_NDK/build/cmake/android.toolchain.cmake"
+          command -v cmake
+          command -v ninja
+
+          cmake \
+            -S . \
+            -B build-android \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-28 \
+            -DGGML_VULKAN=ON \
+            -DGGML_OPENMP=OFF \
+            -DGGML_LLAMAFILE=OFF \
+            -DGGML_NATIVE=OFF \
+            -DLLAMA_CURL=OFF \
+            -DCMAKE_CXX_FLAGS="-I$HOME/vulkan-install/include -I$HOME/spirv-install/include" \
+            -DCMAKE_PREFIX_PATH="$HOME/spirv-install;$HOME/vulkan-install" \
+            -DSPIRV-Headers_DIR="$SPIRV_HEADERS_DIR" \
+            -DVulkanHeaders_DIR="$VULKAN_HEADERS_DIR"
+
+      - name: Build Android Vulkan
+        run: |
+          set -e
+          cmake --build build-android --parallel 2
+
+      - name: Verify build artifacts
+        run: |
+          set -e
+          ls -lh build-android/bin/
+          test -x build-android/bin/llama-cli
+          test -x build-android/bin/llama-server
+          ./build-android/bin/llama-cli --version
+
+      - name: Inspect GGUF
+        run: |
+          set -e
+          ./build-android/bin/llama-cli \
+            -m "models/${MODEL_FILE}" \
+            --model-info 2>&1 | tee model-info.txt
+
+      - name: CPU model sanity test
+        run: |
+          set -e
+          ./build-android/bin/llama-cli \
+            -m "models/${MODEL_FILE}" \
+            -ngl 0 \
+            -c 256 \
+            -n 16 \
+            -t 2 \
+            -p "What is 2 plus 2? Reply with only the number." \
+            --no-display-prompt \
+            2>&1 | tee inference-test.txt
+
+          grep -Eiq '(^|[^0-9])4([^0-9]|$)' inference-test.txt
+          echo "MODEL CPU SANITY: PASS"
+
+      - name: Package
+        run: |
+          set -e
+          tar -czf llama-android-vulkan.tar.gz -C build-android/bin .
+          sha256sum llama-android-vulkan.tar.gz
+          ls -lh llama-android-vulkan.tar.gz
+
+      - name: Upload build
+        uses: actions/upload-artifact@v6
+        with:
+          name: llama-android-vulkan
+          path: |
+            llama-android-vulkan.tar.gz
+            TARGET_GPU_PROFILE.txt
+            model-info.txt
+            inference-test.txt
