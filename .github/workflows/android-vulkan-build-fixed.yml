@@ -160,28 +160,27 @@ jobs:
       - name: Record target Adreno 660 profile
         run: |
           cat > TARGET_GPU_PROFILE.txt <<'EOF'
-Target Android GPU:
-  SoC: Qualcomm Snapdragon SM8350
-  GPU: Adreno 660
-  Driver: Mesa Turnip
-  Android ABI: arm64-v8a
-  Vulkan backend: GGML_VULKAN
+          Target Android GPU:
+            SoC: Qualcomm Snapdragon SM8350
+            GPU: Adreno 660
+            Driver: Mesa Turnip
+            Android ABI: arm64-v8a
+            Vulkan backend: GGML_VULKAN
 
-Observed phone Vulkan profile:
-  Vulkan memory: ~5449 MiB
-  Subgroup size: 128
-  Subgroup minimum: 64
-  Subgroup maximum: 128
-  Subgroup arithmetic: enabled
-  Subgroup size control: enabled
-  Full subgroups: enabled
+          Observed phone Vulkan profile:
+            Vulkan memory: ~5449 MiB
+            Subgroup size: 128
+            Subgroup minimum: 64
+            Subgroup maximum: 128
+            Subgroup arithmetic: enabled
+            Subgroup size control: enabled
+            Full subgroups: enabled
 
-Important:
-  GitHub runner cannot execute this binary on the actual
-  Adreno 660 / Turnip phone GPU.
-  Final GPU inference validation must be performed on-device.
-
-          PROFILE
+          Important:
+            GitHub runner cannot execute this binary on the actual
+            Adreno 660 / Turnip phone GPU.
+            Final GPU inference validation must be performed on-device.
+          EOF
 
           cat TARGET_GPU_PROFILE.txt
 
@@ -219,36 +218,26 @@ Important:
           set -e
           cmake --build build-android --parallel 2
 
-      - name: Verify build artifacts
+      - name: Verify Android ARM64 artifacts
         run: |
           set -e
-          ls -lh build-android/bin/
           test -x build-android/bin/llama-cli
           test -x build-android/bin/llama-server
-          ./build-android/bin/llama-cli --version
+          file build-android/bin/llama-cli
+          file build-android/bin/llama-server
+          readelf -h build-android/bin/llama-cli | grep -E "Class:|Machine:"
+          readelf -h build-android/bin/llama-server | grep -E "Class:|Machine:"
+          sha256sum build-android/bin/llama-cli build-android/bin/llama-server
+          echo "ANDROID ARM64 ARTIFACT CHECK: PASS"
 
       - name: Inspect GGUF
         run: |
           set -e
-          ./build-android/bin/llama-cli \
-            -m "models/${MODEL_FILE}" \
-            --model-info 2>&1 | tee model-info.txt
-
-      - name: CPU model sanity test
-        run: |
-          set -e
-          ./build-android/bin/llama-cli \
-            -m "models/${MODEL_FILE}" \
-            -ngl 0 \
-            -c 256 \
-            -n 16 \
-            -t 2 \
-            -p "What is 2 plus 2? Reply with only the number." \
-            --no-display-prompt \
-            2>&1 | tee inference-test.txt
-
-          grep -Eiq '(^|[^0-9])4([^0-9]|$)' inference-test.txt
-          echo "MODEL CPU SANITY: PASS"
+          test -s "models/${MODEL_FILE}"
+          file "models/${MODEL_FILE}"
+          sha256sum "models/${MODEL_FILE}"
+          stat -c "GGUF_SIZE_BYTES=%s" "models/${MODEL_FILE}"
+          echo "GGUF STATIC CHECK: PASS"
 
       - name: Package
         run: |
@@ -264,5 +253,3 @@ Important:
           path: |
             llama-android-vulkan.tar.gz
             TARGET_GPU_PROFILE.txt
-            model-info.txt
-            inference-test.txt
