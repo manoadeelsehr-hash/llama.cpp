@@ -3,16 +3,8 @@ name: Remote Android Vulkan Build
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [android-vulkan-build]
-    inputs:
-      model_repo:
-        description: 'Hugging Face GGUF repository'
-        required: false
-        default: 'rippertnt/Qwen3-1.7B-Q4_K_M-GGUF'
-      model_file:
-        description: 'GGUF filename'
-        required: false
-        default: 'qwen3-1.7b-q4_k_m.gguf'
+    types:
+      - android-vulkan-build
 
 jobs:
   build:
