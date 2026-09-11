@@ -43,6 +43,21 @@ jobs:
           test -f "$SPIRV_HEADERS_DIR/SPIRV-HeadersConfig.cmake"
           echo "SPIRV_HEADERS_DIR=$SPIRV_HEADERS_DIR" >> "$GITHUB_ENV"
 
+      - name: Diagnose Android toolchain
+        run: |
+          echo "=== HOST ==="
+          uname -a
+          uname -m
+          echo "=== NDK ==="
+          echo "$ANDROID_NDK"
+          file "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+          ls -l "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+          echo "=== CLANG ==="
+          "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" --version
+          echo "=== ELF ==="
+          readelf -h "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" | grep -E 'Class:|Data:|Machine:'
+          echo "=== DONE ==="
+
       - name: Configure Android Vulkan build
         env:
           ANDROID_NDK: /home/runner/android-sdk/ndk/27.2.12479018
