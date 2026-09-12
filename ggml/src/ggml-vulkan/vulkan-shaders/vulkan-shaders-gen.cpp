@@ -396,6 +396,13 @@ void string_to_spv_func(std::string name, std::string in_path, std::string out_p
         // std::cout << std::endl;
 
         int exit_code = execute_command(cmd, stdout_str, stderr_str);
+        if ((exit_code != 0 || !stderr_str.empty()) && std::find(cmd.begin(), cmd.end(), "-O") != cmd.end()) {
+            std::cerr << "PATCH-02: optimized compile failed for " << name << ", retrying without -O\n";
+            cmd.erase(std::find(cmd.begin(), cmd.end(), "-O"));
+            stdout_str.clear();
+            stderr_str.clear();
+            exit_code = execute_command(cmd, stdout_str, stderr_str);
+        }
         if (exit_code != 0 || !stderr_str.empty()) {
             std::cerr << "cannot compile " << name << " (exit code " << exit_code << ")\n\n";
             for (const auto& part : cmd) {
